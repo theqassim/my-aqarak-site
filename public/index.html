@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>عقارك - تسجيل الدخول</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="form-container neon-glow">
+
+        <form id="login-form">
+            <h2>تسجيل الدخول</h2>
+            
+            <div class="input-group">
+                <label for="login-email">البريد الإلكتروني</label>
+                <input type="email" id="login-email" required>
+            </div>
+            
+            <div class="input-group">
+                <label for="login-password">كلمة المرور</label>
+                <input type="password" id="login-password" required>
+            </div>
+            
+            <button type="submit" class="btn-neon">دخول</button>
+            
+            <p class="toggle-link" id="show-register">
+                لا تملك حسابًا؟ انشئ حساب الآن!
+            </p>
+        </form>
+
+        <form id="register-form">
+            <h2>إنشاء حساب جديد</h2>
+            
+            <div class="input-group">
+                <label for="reg-name">الاسم</label>
+                <input type="text" id="reg-name" required>
+            </div>
+
+            <div class="input-group">
+                <label for="reg-email">البريد الإلكتروني</label>
+                <input type="email" id="reg-email" required>
+            </div>
+            
+            <div class="input-group">
+                <label for="reg-password">كلمة المرور</label>
+                <input type="password" id="reg-password" required>
+            </div>
+            
+            <button type="submit" class="btn-neon">إنشاء حساب</button>
+            
+            <p class="toggle-link" id="show-login">
+                لديك حساب بالفعل؟ سجل الدخول
+            </p>
+        </form>
+
+    </div>
+    <script src="auth.js"></script>
+</body>
+</html>

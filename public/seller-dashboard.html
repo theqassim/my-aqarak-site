@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="auth-guard.js"></script>
+    <title>عقارك - اعرض عقارك</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="internal-page">
+
+    <header class="main-header">
+        <div class="header-container">
+            <div class="logo-container">
+                <img src="logo.jpg" alt="شعار عقارك" class="logo">
+                <span class="logo-text">عقارك مضمون!</span>
+            </div>
+            <nav class="main-nav">
+                <a href="home.html" class="nav-button neon-button-white">الرئيسية للموقع</a> 
+                <a href="index.html" class="nav-button neon-button-white logout-btn">تسجيل خروج</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="seller-form-container neon-glow">
+            <h2>نموذج عرض عقار</h2>
+            <p>املأ البيانات التالية وارفع الصور، وستصلنا للمراجعة.</p>
+
+            <form action="https://formsubmit.co/aqarakproperty@gmail.com" method="POST" enctype="multipart/form-data">
+
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label for="seller-name">اسمك</label>
+                        <input type="text" id="seller-name" name="الاسم" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="seller-phone">رقم تليفونك (للتواصل)</label>
+                        <input type="tel" id="seller-phone" name="رقم_الهاتف" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="property-title">عنوان الإعلان (مثال: شقة للبيع بالمعادي)</label>
+                        <input type="text" id="property-title" name="عنوان_العقار" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="property-type">نوع العرض</label>
+                        <select id="property-type" name="نوع_العرض" required>
+                            <option value="">اختر...</option>
+                            <option value="بيع">بيع</option>
+                            <option value="إيجار">إيجار</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="property-price">السعر المطلوب (جنيه)</label>
+                        <input type="text" id="property-price" name="السعر" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="property-area">المساحة (م²)</label>
+                        <input type="number" id="property-area" name="المساحة" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="property-rooms">عدد الغرف</label>
+                        <input type="number" id="property-rooms" name="الغرف" min="1" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="property-bathrooms">عدد الحمامات</label>
+                        <input type="number" id="property-bathrooms" name="الحمامات" min="1" required>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="property-description">وصف تفصيلي للعقار</label>
+                    <textarea id="property-description" name="الوصف" rows="5"></textarea>
+                </div>
+
+               <div class="input-group">
+    <label>ارفع صور العقار (يمكنك اختيار أكثر من صورة)</label>
+    
+    <label for="property-images" class="file-upload-label btn-neon">
+        <i class="fas fa-upload"></i> اختر الصور
+    </label>
+    
+    <input type="file" id="property-images" name="images" multiple accept="image/*" required>
+    
+    <div class="image-preview-container" id="image-preview-container">
+        </div>
+</div>
+</div>
+                
+                <input type="hidden" name="_next" value="http://localhost:3000/thank-you.html">
+                <input type="hidden" name="_subject" value="طلب عرض عقار جديد!">
+                <input type="hidden" name="_captcha" value="false">
+
+                <button type="submit" class="btn-neon">تأكيد وإرسال للمراجعة</button>
+            </form>
+        </div>
+    </main>
+
+    <footer class="main-footer">
+        <div class="footer-content">
+            <div class="social-links">
+                <a href="https://www.facebook.com/share/1DRMsHUZdG/" title="فيسبوك" target="_blank"><i class="fab fa-facebook-f"></i></a>
+                <a href="https://www.instagram.com/aqarak.eg?igsh=ZHZhd2U0NTg4MzAy" title="انستجرام" target="_blank"><i class="fab fa-instagram"></i></a>
+                <a href="https://whatsapp.com/channel/0029Vb6YH08CxoAoe7aaSP38" title="واتساب" target="_blank"><i class="fab fa-whatsapp"></i></a>
+            </div>
+            <p class="contact-info">تواصل معنا: contact@aqarak.com</p>
+            <p>جميع الحقوق محفوظة © 2025 - عقارك</p>
+        </div>
+    </footer>
+    <script src="global-nav.js"></script> 
+    <script src="logout.js"></script>
+
+    ...
+    <script src="global-nav.js"></script> 
+    <script src="logout.js"></script> 
+
+   <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const imageInput = document.getElementById('property-images');
+        const previewContainer = document.getElementById('image-preview-container');
+        const sellerForm = document.getElementById('seller-form');
+        const messageEl = document.getElementById('seller-form-message');
+
+        let allSelectedFiles = []; 
+
+        if (imageInput) {
+            imageInput.addEventListener('change', (event) => {
+                const files = event.target.files;
+                if (files.length === 0) return;
+
+                previewContainer.style.border = "1px solid #28a745";
+
+                for (const file of files) {
+                    allSelectedFiles.push(file); 
+                    
+                    const reader = new FileReader();
+                    
+                    reader.onload = (e) => {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.classList.add('preview-image');
+                        previewContainer.appendChild(img); 
+                    }
+                    
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        if (sellerForm) {
+            sellerForm.addEventListener('submit', async (e) => {
+                e.preventDefault(); 
+                messageEl.textContent = 'جاري إرسال البيانات والصور...';
+                messageEl.className = '';
+
+                const formData = new FormData();
+                
+                formData.append('الاسم', document.getElementById('seller-name').value);
+                formData.append('رقم_الهاتف', document.getElementById('seller-phone').value);
+                formData.append('عنوان_العقار', document.getElementById('property-title').value);
+                formData.append('نوع_العرض', document.getElementById('property-type').value);
+                formData.append('السعر', document.getElementById('property-price').value);
+                formData.append('المساحة', document.getElementById('property-area').value);
+                formData.append('الغرف', document.getElementById('property-rooms').value);
+                formData.append('الحمامات', document.getElementById('property-bathrooms').value);
+                formData.append('الوصف', document.getElementById('property-description').value);
+                
+                formData.append('_subject', 'طلب عرض عقار جديد!');
+                formData.append('_captcha', 'false');
+
+                if (allSelectedFiles.length === 0) {
+                    messageEl.textContent = 'يرجى اختيار صورة واحدة على الأقل.';
+                    messageEl.className = 'error';
+                    return;
+                }
+
+                allSelectedFiles.forEach((file, index) => {
+                    formData.append(`images[]`, file, file.name); 
+                });
+
+                try {
+                    const response = await fetch('https://formsubmit.co/kassemahmed1052004@gmail.com', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'Accept': 'application/json' 
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('حدث خطأ أثناء الإرسال.');
+                    }
+                    
+                    messageEl.textContent = 'تم إرسال طلبك بنجاح! سنتواصل معك قريباً.';
+                    messageEl.className = 'success';
+                    sellerForm.reset();
+                    previewContainer.innerHTML = '';
+                    previewContainer.style.border = "1px dashed #555";
+                    allSelectedFiles = [];
+
+                } catch (error) {
+                    messageEl.textContent = 'فشل الإرسال. حاول مرة أخرى.';
+                    messageEl.className = 'error';
+                }
+            });
+        }
+    });
+    </script>
+    </body>
+</html>
+</body>
+</html>
