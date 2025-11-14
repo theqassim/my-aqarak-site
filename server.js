@@ -1,13 +1,23 @@
+require('dotenv').config();
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const mongoose = require('mongoose');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 
-const app = express();
-const PORT = 3000;
+const app = express(); 
+
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)){
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadDir));
+
+const PORT = process.env.PORT || 3000;
 
 const ADMIN_EMAIL = "admin@aqarak.com";
 const ADMIN_PASSWORD = "12345";
@@ -17,316 +27,245 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const dbPath = path.join(__dirname, 'database.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error connecting to database:', err.message);
-    } else {
-        console.log('Connected to the SQLite database.');
-        createTables();
-    }
+const MONGO_URI = process.env.DATABASE_URL; 
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('Connected to MongoDB Atlas!'))
+    .catch(err => {
+        console.error("--- MONGO CONNECTION ERROR ---");
+        console.error(err.stack || err.message || JSON.stringify(err));
+        console.error("--- ERROR END ---");
+    });
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const uploadDir = 'public/uploads';
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, uploadDir);
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'aqarak', 
+        format: async (req, file) => 'jpg',
+        public_id: (req, file) => Date.now() + '-' + file.originalname,
     },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + '-' + file.originalname);
+});
+
+const upload = multer({ storage: storage }); 
+
+const UserSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    role: { type: String, default: 'user' }
+});
+const User = mongoose.model('User', UserSchema);
+
+const PropertySchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    price: { type: String, required: true },
+    numericPrice: Number,
+    rooms: Number,
+    bathrooms: Number,
+    area: Number,
+    description: String,
+    imageUrl: String,
+    imageUrls: [String],
+    type: { type: String, required: true },
+    hiddenCode: { type: String, required: true, unique: true }
+});
+const Property = mongoose.model('Property', PropertySchema);
+
+
+app.post('/api/add-property', upload.array('propertyImages', 10), async (req, res) => {
+    const { title, price, rooms, bathrooms, area, description, type, hiddenCode } = req.body;
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: 'يجب رفع صورة واحدة على الأقل' });
+    }
+    
+    const imageUrls = req.files.map(file => file.path); 
+    const mainImageUrl = imageUrls[0];
+    const numericPrice = parseFloat(price.replace(/,/g, ''));
+
+    if (!title || !price || !type || !hiddenCode) {
+        return res.status(400).json({ message: 'خطأ: الحقول الأساسية مطلوبة' });
+    }
+    
+    try {
+        const newProperty = new Property({
+            title, price, numericPrice, rooms, bathrooms, area, description,
+            imageUrl: mainImageUrl,
+            imageUrls: imageUrls,
+            type, hiddenCode
+        });
+        const savedProperty = await newProperty.save();
+        res.status(201).json({ message: 'تم إضافة العقار بنجاح!', id: savedProperty._id });
+    } catch (err) {
+        if (err.code === 11000) { 
+             return res.status(400).json({ message: 'خطأ: الكود السري ده مستخدم قبل كده' });
+        }
+        console.error('--- ADD PROPERTY ERROR ---'); 
+        console.error(err.stack || err.message || JSON.stringify(err));
+        console.error('--- ERROR END ---');
+        res.status(500).json({ message: 'خطأ في السيرفر عند الإضافة' });
     }
 });
 
-const upload = multer({ storage: storage });
+app.put('/api/update-property/:id', upload.array('propertyImages', 10), async (req, res) => {
+    const propertyId = req.params.id;
+    const { title, price, rooms, bathrooms, area, description, type, hiddenCode, existingImages } = req.body;
+    
+    let existingImageUrls = JSON.parse(existingImages || '[]');
+    const newImageUrls = req.files ? req.files.map(file => file.path) : []; 
+    
+    const allImageUrls = [...existingImageUrls, ...newImageUrls];
+    const mainImageUrl = allImageUrls.length > 0 ? allImageUrls[0] : null;
+    const numericPrice = parseFloat(price.replace(/,/g, ''));
 
-function createTables() {
-    const createPropertiesTableSql = `
-        CREATE TABLE IF NOT EXISTS properties (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            price TEXT NOT NULL,
-            numericPrice REAL, 
-            rooms INTEGER,
-            bathrooms INTEGER,
-            area INTEGER,
-            description TEXT,
-            imageUrl TEXT,
-            imageUrls TEXT,
-            type TEXT NOT NULL,
-            hiddenCode TEXT
-        )
-    `;
-    db.run(createPropertiesTableSql, (err) => {
-        if (err) console.error('Error creating properties table:', err.message);
-        else console.log('Properties table OK.');
-    });
+    if (!title || !price || !type || !hiddenCode) {
+        return res.status(400).json({ message: 'خطأ: الحقول الأساسية مطلوبة' });
+    }
 
-    const createUsersTableSql = `
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            role TEXT DEFAULT 'user'
-        )
-    `;
-    db.run(createUsersTableSql, (err) => {
-        if (err) console.error('Error creating users table:', err.message);
-        else console.log('Users table OK.');
-    });
-}
+    try {
+        const updatedProperty = await Property.findByIdAndUpdate(propertyId, {
+            title, price, numericPrice, rooms, bathrooms, area, description,
+            imageUrl: mainImageUrl,
+            imageUrls: allImageUrls,
+            type, hiddenCode
+        }, { new: true }); 
 
-// ... (كود /api/register و /api/login زي ما هو مفيش تغيير) ...
+        if (!updatedProperty) {
+            return res.status(404).json({ message: 'لم يتم العثور على العقار لتحديثه' });
+        }
+        res.status(200).json({ message: 'تم تحديث العقار بنجاح!' });
+    } catch (err) {
+        console.error('--- UPDATE PROPERTY ERROR ---');
+        console.error(err.stack || err.message || JSON.stringify(err));
+        console.error('--- ERROR END ---');
+        res.status(500).json({ message: 'خطأ في السيرفر عند التحديث' });
+    }
+});
+
+
 app.post('/api/register', async (req, res) => {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
         return res.status(400).json({ message: 'يرجى ملء جميع الحقول' });
     }
-
     try {
-        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-        const sql = `INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`;
+        const existingUser = await User.findOne({ email: email });
+        if (existingUser) {
+            return res.status(400).json({ message: 'هذا البريد الإلكتروني مسجل بالفعل' });
+        }
         
-        db.run(sql, [name, email, hashedPassword, 'user'], function(err) {
-            if (err) {
-                if (err.code === 'SQLITE_CONSTRAINT') {
-                    return res.status(400).json({ message: 'هذا البريد الإلكتروني مسجل بالفعل' });
-                }
-                return res.status(500).json({ message: 'خطأ في السيرفر' });
-            }
-            res.status(201).json({ success: true, message: 'تم إنشاء الحساب بنجاح!' });
-        });
-    } catch (error) {
-        res.status(500).json({ message: 'خطأ في تشفير كلمة المرور' });
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+        const user = new User({ name, email, password: hashedPassword, role: 'user' });
+        await user.save();
+        res.status(201).json({ success: true, message: 'تم إنشاء الحساب بنجاح!' });
+    } catch (err) {
+        console.error(err.stack || err.message || JSON.stringify(err));
+        res.status(500).json({ message: 'خطأ في السيرفر' });
     }
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { email, password } = req.body;
-
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
         return res.json({ success: true, role: 'admin' });
     }
-
-    const sql = `SELECT * FROM users WHERE email = ?`;
-    db.get(sql, [email], async (err, user) => {
-        if (err) {
-            return res.status(500).json({ message: 'خطأ في السيرفر' });
-        }
+    try {
+        const user = await User.findOne({ email: email });
         if (!user) {
             return res.status(401).json({ message: 'الإيميل أو كلمة المرور غير صحيحة' });
         }
-
         const isMatch = await bcrypt.compare(password, user.password);
         if (isMatch) {
             res.json({ success: true, role: user.role });
         } else {
             res.status(401).json({ message: 'الإيميل أو كلمة المرور غير صحيحة' });
         }
-    });
-});
-// ... (كود /api/properties زي ما هو مفيش تغيير) ...
-app.get('/api/properties', (req, res) => {
-    let sql = "SELECT id, title, price, rooms, bathrooms, area, imageUrl FROM properties";
-    const params = [];
-    const filters = [];
-
-    const { type, limit, keyword, minPrice, maxPrice, rooms } = req.query;
-
-    if (type) {
-        if (type === 'buy') {
-            filters.push("type = ?");
-            params.push('بيع');
-        } else if (type === 'rent') {
-            filters.push("type = ?");
-            params.push('إيجار');
-        }
+    } catch (err) {
+        console.error(err.stack || err.message || JSON.stringify(err));
+        res.status(500).json({ message: 'خطأ في السيرفر' });
     }
-    
-    if (keyword) {
-        filters.push("(title LIKE ? OR description LIKE ?)");
-        params.push(`%${keyword}%`);
-        params.push(`%${keyword}%`);
-    }
-
-    if (minPrice) {
-        filters.push("numericPrice >= ?");
-        params.push(Number(minPrice));
-    }
-
-    if (maxPrice) {
-        filters.push("numericPrice <= ?");
-        params.push(Number(maxPrice));
-    }
-
-    if (rooms) {
-        if (rooms === '4+') {
-            filters.push("rooms >= ?");
-            params.push(4);
-        } else {
-            filters.push("rooms = ?");
-            params.push(Number(rooms));
-        }
-    }
-
-    if (filters.length > 0) {
-        sql += " WHERE " + filters.join(" AND ");
-    }
-    
-    sql += " ORDER BY id DESC";
-
-    if (limit) {
-        sql += " LIMIT ?";
-        params.push(parseInt(limit, 10));
-    }
-
-    db.all(sql, params, (err, rows) => {
-        if (err) {
-            res.status(500).json({ "error": err.message });
-            return;
-        }
-        res.json(rows);
-    });
 });
 
-app.get('/api/property/:id', (req, res) => {
-    const sql = "SELECT * FROM properties WHERE id = ?";
-    const params = [req.params.id];
-
-    db.get(sql, params, (err, row) => {
-        if (err) {
-            res.status(500).json({ "error": err.message });
-            return;
+app.get('/api/properties', async (req, res) => {
+    try {
+        const { type, limit, keyword, minPrice, maxPrice, rooms } = req.query;
+        let query = {};
+        
+        if (type === 'buy') query.type = 'بيع';
+        if (type === 'rent') query.type = 'إيجار';
+        if (keyword) {
+            query.$or = [
+                { title: { $regex: keyword, $options: 'i' } },
+                { description: { $regex: keyword, $options: 'i' } }
+            ];
         }
-        if (row) {
-            res.json(row);
+        if (minPrice) query.numericPrice = { $gte: Number(minPrice) };
+        if (maxPrice) {
+            if (query.numericPrice) query.numericPrice.$lte = Number(maxPrice);
+            else query.numericPrice = { $lte: Number(maxPrice) };
+        }
+        if (rooms) {
+            if (rooms === '4+') query.rooms = { $gte: 4 };
+            else query.rooms = Number(rooms);
+        }
+
+        let findQuery = Property.find(query, 'id title price rooms bathrooms area imageUrl')
+                            .sort({ _id: -1 });
+
+        if (limit) findQuery = findQuery.limit(parseInt(limit, 10));
+
+        const properties = await findQuery;
+        res.json(properties);
+    } catch (err) {
+        console.error('--- GET PROPERTIES ERROR ---');
+        console.error(err.stack || err.message || JSON.stringify(err));
+        console.error('--- ERROR END ---');
+        res.status(500).json({ "error": err.message });
+    }
+});
+
+app.get('/api/property/:id', async (req, res) => {
+    try {
+        const property = await Property.findById(req.params.id);
+        if (property) {
+            res.json(property);
         } else {
             res.status(404).json({ "message": "Property not found" });
         }
-    });
+    } catch (err) {
+        console.error(err.stack || err.message || JSON.stringify(err));
+        res.status(500).json({ "error": err.message });
+    }
 });
 
-app.post('/api/add-property', upload.array('propertyImages', 10), (req, res) => {
-    
-    const {
-        title, price, rooms, bathrooms, area, description,
-        type, hiddenCode
-    } = req.body;
-
-    if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ message: 'يجب رفع صورة واحدة على الأقل' });
-    }
-    
-    const imageUrls = req.files.map(file => `/uploads/${file.filename}`);
-    const mainImageUrl = imageUrls[0];
-    const imageUrlsJson = JSON.stringify(imageUrls);
-
-    const numericPrice = parseFloat(price.replace(/,/g, ''));
-
-    if (!title || !price || !type || !hiddenCode) {
-        return res.status(400).json({ message: 'خطأ: الحقول الأساسية مطلوبة' });
-    }
-
-    const sql = `
-        INSERT INTO properties 
-        (title, price, numericPrice, rooms, bathrooms, area, description, imageUrl, imageUrls, type, hiddenCode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    const params = [
-        title, price, numericPrice, rooms, bathrooms, area, description,
-        mainImageUrl, imageUrlsJson, type, hiddenCode
-    ];
-
-    db.run(sql, params, function(err) {
-        if (err) {
-            console.error('Error inserting record:', err.message);
-            return res.status(500).json({ message: 'خطأ في السيرفر عند الإضافة' });
-        }
-        res.status(201).json({ message: 'تم إضافة العقار بنجاح!', id: this.lastID });
-    });
-});
-
-// --- (الكود الجديد للتعديل) ---
-app.put('/api/update-property/:id', upload.array('propertyImages', 10), (req, res) => {
-    const propertyId = req.params.id;
-    const {
-        title, price, rooms, bathrooms, area, description,
-        type, hiddenCode, existingImages
-    } = req.body;
-
-    let existingImageUrls = JSON.parse(existingImages || '[]');
-    const newImageUrls = req.files ? req.files.map(file => `/uploads/${file.filename}`) : [];
-    
-    const allImageUrls = [...existingImageUrls, ...newImageUrls];
-    const mainImageUrl = allImageUrls.length > 0 ? allImageUrls[0] : null;
-    const imageUrlsJson = JSON.stringify(allImageUrls);
-    
-    const numericPrice = parseFloat(price.replace(/,/g, ''));
-
-    if (!title || !price || !type || !hiddenCode) {
-        return res.status(400).json({ message: 'خطأ: الحقول الأساسية مطلوبة' });
-    }
-
-    const sql = `
-        UPDATE properties SET
-        title = ?, price = ?, numericPrice = ?, rooms = ?, bathrooms = ?, area = ?, 
-        description = ?, imageUrl = ?, imageUrls = ?, type = ?, hiddenCode = ?
-        WHERE id = ?
-    `;
-    const params = [
-        title, price, numericPrice, rooms, bathrooms, area, description,
-        mainImageUrl, imageUrlsJson, type, hiddenCode,
-        propertyId
-    ];
-
-    db.run(sql, params, function(err) {
-        if (err) {
-            console.error('Error updating record:', err.message);
-            return res.status(500).json({ message: 'خطأ في السيرفر عند التحديث' });
-        }
-        if (this.changes === 0) {
-            return res.status(404).json({ message: 'لم يتم العثور على العقار لتحديثه' });
-        }
-        res.status(200).json({ message: 'تم تحديث العقار بنجاح!' });
-    });
-});
-// --- (نهاية الكود الجديد) ---
-
-app.get('/api/property-by-code/:code', (req, res) => {
-    const sql = "SELECT id, title, price, hiddenCode FROM properties WHERE hiddenCode = ?";
-    const params = [req.params.code];
-
-    db.get(sql, params, (err, row) => {
-        if (err) {
-            res.status(500).json({ "error": err.message });
-            return;
-        }
-        if (row) {
-            res.json(row);
+app.get('/api/property-by-code/:code', async (req, res) => {
+    try {
+        const property = await Property.findOne({ hiddenCode: req.params.code }, 'id title price hiddenCode');
+        if (property) {
+            res.json(property);
         } else {
             res.status(404).json({ "message": "Property not found" });
         }
-    });
+    } catch (err) {
+        console.error(err.stack || err.message || JSON.stringify(err));
+        res.status(500).json({ "error": err.message });
+    }
 });
 
-app.delete('/api/property/:id', (req, res) => {
-    const sql = "DELETE FROM properties WHERE id = ?";
-    const params = [req.params.id];
-
-    db.run(sql, params, function(err) {
-        if (err) {
-            res.status(500).json({ "error": err.message });
-            return;
-        }
-        res.json({ message: 'Property deleted successfully', changes: this.changes });
-    });
+app.delete('/api/property/:id', async (req, res) => {
+    try {
+        await Property.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Property deleted successfully' });
+    } catch (err) {
+        console.error(err.stack || err.message || JSON.stringify(err));
+        res.status(500).json({ "error": err.message });
+    }
 });
-
 
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
