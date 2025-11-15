@@ -58,7 +58,7 @@ async function fetchAllProperties() {
                         <h3>${property.title}</h3>
                         <p class="price">${property.price}</p>
                         <p>${property.rooms} غرف | ${property.bathrooms} حمام | ${property.area} م²</p>
-                        <a href="property-details.html?id=${property.id}" class="btn">عرض التفاصيل</a>
+                        <a href="property-details.html?id=${property._id}" class="btn">عرض التفاصيل</a>
                     </div>
                 </div>
             `;

@@ -9,12 +9,9 @@ async function fetchLatestProperties() {
     try {
         const response = await fetch('/api/properties?limit=6');
         
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
+        if (!response.ok) throw new Error('Network response was not ok');
         
         const properties = await response.json();
-
         container.innerHTML = '';
 
         if (properties.length === 0) {
@@ -30,7 +27,7 @@ async function fetchLatestProperties() {
                         <h3>${property.title}</h3>
                         <p class="price">${property.price}</p>
                         <p>${property.rooms} غرف | ${property.bathrooms} حمام | ${property.area} م²</p>
-                        <a href="property-details.html?id=${property.id}" class="btn">عرض التفاصيل</a>
+                        <a href="property-details.html?id=${property._id}" class="btn">عرض التفاصيل</a>
                     </div>
                 </div>
             `;
